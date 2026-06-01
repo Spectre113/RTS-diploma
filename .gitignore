@@ -1,0 +1,23 @@
+# Build output
+Debug/
+Release/
+
+# Common STM32CubeIDE generated files
+*.o
+*.d
+*.su
+*.cyclo
+*.map
+*.list
+*.elf
+*.hex
+*.bin
+*.obj
+*.a
+*.lib
+
+# OS/editor junk
+Thumbs.db
+Desktop.ini
+*.tmp
+*.bak

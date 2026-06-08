@@ -1713,30 +1713,6 @@ int main(void)
      *   task was still not accounted/executed separately.
      */
 
-    #if ENABLE_SYNTH_IMU
-      if (tau_imu_ready)
-      {
-        uint64_t release_us = tau_imu_release_us;
-
-        uint64_t exec_start = micros();
-
-        Tau_IMU_Run();
-
-        uint64_t exec_finish = micros();
-        uint64_t finish_us = scheduler_now_us();
-
-        uint64_t exec_time = exec_finish - exec_start;
-        uint64_t response_time = finish_us - release_us;
-
-        Task_UpdateExecStats(&tau_imu, exec_time);
-        Task_UpdateResponseStats(&tau_imu, response_time);
-        Task_CheckDeadline(&tau_imu, response_time);
-
-        Task_AdvanceRelease(&tau_imu, finish_us);
-      }
-    #endif
-
-
     #if ENABLE_SYNTH_CONTROL
       if (tau_control_ready)
       {
@@ -1806,6 +1782,29 @@ int main(void)
         Task_CheckDeadline(&tau_lidar, response_time);
 
         Task_AdvanceRelease(&tau_lidar, finish_us);
+      }
+    #endif
+
+	#if ENABLE_SYNTH_IMU
+      if (tau_imu_ready)
+      {
+        uint64_t release_us = tau_imu_release_us;
+
+        uint64_t exec_start = micros();
+
+        Tau_IMU_Run();
+
+        uint64_t exec_finish = micros();
+        uint64_t finish_us = scheduler_now_us();
+
+        uint64_t exec_time = exec_finish - exec_start;
+        uint64_t response_time = finish_us - release_us;
+
+        Task_UpdateExecStats(&tau_imu, exec_time);
+        Task_UpdateResponseStats(&tau_imu, response_time);
+        Task_CheckDeadline(&tau_imu, response_time);
+
+        Task_AdvanceRelease(&tau_imu, finish_us);
       }
     #endif
 

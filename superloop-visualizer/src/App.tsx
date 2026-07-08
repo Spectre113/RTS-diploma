@@ -50,8 +50,8 @@ const phaseNotes: Record<
   }
 > = {
   intro: {
-    title: 'Release pointers',
-    accent: 'Initial jobs are visible. The loop stores release pointers.',
+    title: 'Initial release',
+    accent: 'Both tasks are ready at t=0. No job queue is stored.',
   },
   decision: {
     title: 'Ready test',
@@ -66,12 +66,12 @@ const phaseNotes: Record<
     accent: 'Response = finish time - release time.',
   },
   advance: {
-    title: 'Pointer update',
+    title: 'next_release update',
     accent: 'Only this task moves to its next period.',
   },
   skip: {
     title: 'Skipped release',
-    accent: 'Past releases are counted, then pointer jumps.',
+    accent: 'Past releases are counted, then next_release jumps.',
   },
   idle: {
     title: 'Polling gap',
@@ -427,7 +427,7 @@ function SystemNote({ step }: { step: SimulationStep }) {
         </div>
       </div>
 
-      <div className="pointer-table" aria-label="Task pointers">
+      <div className="pointer-table" aria-label="Task next releases">
         {scenario.tasks.map((task) => {
           const stats = state.stats[task.id];
 

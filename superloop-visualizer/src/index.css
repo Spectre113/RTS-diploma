@@ -28,14 +28,15 @@
   --muted: var(--color-text-muted);
   --border: var(--color-border);
   --panel: rgba(11, 17, 32, 0.78);
-  --lidar: #ff4d6d;
+  --lidar: #a78bfa;
   --imu: #00c2ff;
   --ok: var(--color-accent);
   --miss: #ff4d6d;
   --skip: #fbbf24;
   --active: #f3f4f6;
   --shadow: var(--color-shadow);
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', sans-serif;
 
   color: var(--ink);
@@ -56,12 +57,25 @@ body {
   min-height: 100svh;
   margin: 0;
   background:
-    radial-gradient(circle at 18% 0%, rgba(56, 242, 163, 0.12), transparent 30%),
-    radial-gradient(circle at 84% 12%, rgba(0, 194, 255, 0.13), transparent 28%),
+    radial-gradient(
+      circle at 18% 0%,
+      rgba(56, 242, 163, 0.12),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 84% 12%,
+      rgba(0, 194, 255, 0.13),
+      transparent 28%
+    ),
     linear-gradient(var(--color-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-grid) 1px, transparent 1px),
     var(--color-bg);
-  background-size: auto, auto, 34px 34px, 34px 34px, auto;
+  background-size:
+    auto,
+    auto,
+    34px 34px,
+    34px 34px,
+    auto;
 }
 
 button,

@@ -87,7 +87,11 @@
   min-height: 0;
   padding: 10px;
   background:
-    radial-gradient(circle at 24% 10%, rgba(56, 242, 163, 0.08), transparent 32%),
+    radial-gradient(
+      circle at 24% 10%,
+      rgba(56, 242, 163, 0.08),
+      transparent 32%
+    ),
     var(--hero-code-bg);
 }
 
@@ -105,12 +109,92 @@
   font-size: 0.98rem;
 }
 
+.timeline-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.timeline-card .card-title {
+  margin-bottom: 0;
+}
+
 .timeline-svg {
   display: block;
   width: 100%;
-  height: calc(100% - 36px);
+  height: 100%;
   min-height: 0;
   color: var(--ink);
+}
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 28px;
+  padding: 6px 8px;
+  border: 1px solid rgba(156, 163, 175, 0.16);
+  border-radius: 8px;
+  background: rgba(5, 8, 22, 0.32);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(243, 244, 246, 0.12);
+}
+
+.legend-swatch--lidar {
+  background: var(--lidar);
+}
+
+.legend-swatch--imu {
+  background: var(--imu);
+}
+
+.legend-swatch--ok {
+  background: var(--ok);
+}
+
+.legend-swatch--miss {
+  background: var(--miss);
+}
+
+.legend-swatch--skip {
+  background: var(--skip);
+}
+
+.legend-line {
+  width: 22px;
+  height: 0;
+  border-top: 2px dashed var(--color-accent);
+  filter: drop-shadow(0 0 6px var(--dotted-grid-glow));
+}
+
+.legend-line--deadline {
+  border-top: 2px dashed var(--miss);
+}
+
+@media (max-width: 760px) {
+  .timeline-legend {
+    gap: 6px 10px;
+  }
+
+  .legend-item {
+    font-size: 0.68rem;
+  }
 }
 
 .grid-line {
@@ -159,7 +243,9 @@
 }
 
 .release {
-  transition: opacity 240ms ease, transform 240ms ease;
+  transition:
+    opacity 240ms ease,
+    transform 240ms ease;
 }
 
 .release.future {
@@ -253,8 +339,7 @@
 
 .execution-block.running rect {
   fill: #ffffff;
-  filter:
-    drop-shadow(0 0 14px rgba(255, 255, 255, 0.38))
+  filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.38))
     drop-shadow(0 0 22px rgba(56, 242, 163, 0.22));
 }
 
@@ -283,7 +368,9 @@
   stroke-dasharray: 7 5;
   stroke-width: 2;
   filter: drop-shadow(0 0 8px var(--dotted-grid-glow));
-  transition: x1 260ms ease, x2 260ms ease;
+  transition:
+    x1 260ms ease,
+    x2 260ms ease;
 }
 
 .current-dot {
@@ -305,7 +392,11 @@
   min-height: 282px;
   border-radius: 8px;
   background:
-    radial-gradient(circle at center, rgba(56, 242, 163, 0.12), transparent 35%),
+    radial-gradient(
+      circle at center,
+      rgba(56, 242, 163, 0.12),
+      transparent 35%
+    ),
     rgba(17, 24, 39, 0.45);
   box-shadow: inset 0 0 0 1px var(--border);
 }
@@ -330,7 +421,10 @@
   background: var(--color-surface-secondary);
   color: var(--color-text-secondary);
   text-align: center;
-  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .loop-node[data-phase='decision'] {
@@ -759,7 +853,10 @@ button {
   color: var(--ink);
   cursor: pointer;
   font-weight: 840;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 button:hover {

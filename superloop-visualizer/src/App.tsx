@@ -24,7 +24,7 @@ const timeline = {
 };
 
 const taskColors: Record<TaskId, string> = {
-  lidar: '#ff4d6d',
+  lidar: '#a78bfa',
   imu: '#00c2ff',
 };
 
@@ -280,6 +280,43 @@ function TimelineBoard({ step }: { step: SimulationStep }) {
           t={formatTime(state.time)}
         </text>
       </svg>
+
+      <div className="timeline-legend" aria-label="Timeline legend">
+        <span className="legend-item">
+          <span className="legend-swatch legend-swatch--lidar" />
+          LiDAR task
+        </span>
+
+        <span className="legend-item">
+          <span className="legend-swatch legend-swatch--imu" />
+          IMU task
+        </span>
+
+        <span className="legend-item">
+          <span className="legend-swatch legend-swatch--ok" />
+          completed on time
+        </span>
+
+        <span className="legend-item">
+          <span className="legend-swatch legend-swatch--miss" />
+          deadline miss
+        </span>
+
+        <span className="legend-item">
+          <span className="legend-swatch legend-swatch--skip" />
+          skipped release
+        </span>
+
+        <span className="legend-item">
+          <span className="legend-line legend-line--current" />
+          current time
+        </span>
+
+        <span className="legend-item">
+          <span className="legend-line legend-line--deadline" />
+          deadline D
+        </span>
+      </div>
     </section>
   );
 }

@@ -180,6 +180,20 @@ function TimelineBoard({ step }: { step: SimulationStep }) {
         <span>time board</span>
         <strong>jobs release / execution</strong>
       </div>
+
+      <aside className="reading-guide" aria-label="How to read the timeline">
+        <strong>How to read it</strong>
+        <p>
+          Arrows show when tasks appear. Blocks show when the CPU actually runs
+          them. The superloop checks LiDAR first, then IMU. Once a task starts,
+          it runs to the end.
+        </p>
+        <p>
+          Main idea: a fixed order plus no interruption can make a shorter task
+          miss its deadline.
+        </p>
+      </aside>
+
       <svg
         className="timeline-svg"
         viewBox={`0 0 ${timeline.viewBoxWidth} ${timeline.viewBoxHeight}`}

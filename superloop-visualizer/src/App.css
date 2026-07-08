@@ -111,12 +111,37 @@
 
 .timeline-card {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 8px;
 }
 
 .timeline-card .card-title {
   margin-bottom: 0;
+}
+
+.reading-guide {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid rgba(56, 242, 163, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(56, 242, 163, 0.08), transparent 70%),
+    rgba(5, 8, 22, 0.3);
+}
+
+.reading-guide strong {
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 860;
+}
+
+.reading-guide p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 680;
+  line-height: 1.25;
 }
 
 .timeline-svg {

@@ -70,6 +70,15 @@
 
 #define SCHEDULER_MODE SCHED_BUSY_POLLING
 
+#define SCHED_ALGO_SUPERLOOP 0
+#define SCHED_ALGO_EDF       1
+
+#define SCHED_ALGO SCHED_ALGO_EDF
+
+#if (SCHED_ALGO != SCHED_ALGO_SUPERLOOP) && (SCHED_ALGO != SCHED_ALGO_EDF)
+#error "Unsupported scheduler algorithm"
+#endif
+
 #define ENABLE_POLLING_PROFILE 1
 
 #define EXPERIMENT_INTEGRATED      0
@@ -111,6 +120,15 @@ typedef struct
 
   uint32_t exec_hist[EXEC_HIST_BINS];
 } Task_t;
+
+typedef void (*TaskRunFn)(void);
+
+typedef struct
+{
+  Task_t *task;
+  TaskRunFn run;
+  uint8_t enabled;
+} SchedTaskRef_t;
 
 /* USER CODE END PTD */
 
@@ -680,6 +698,64 @@ static void Task_UpdateResponseStats(Task_t *task, uint64_t response_us)
   }
 }
 
+#if SCHED_ALGO == SCHED_ALGO_EDF
+static SchedTaskRef_t *Scheduler_SelectEDF(SchedTaskRef_t *tasks,
+                                           uint32_t count,
+                                           uint64_t now_us)
+{
+  SchedTaskRef_t *selected = NULL;
+  uint64_t selected_deadline_us = 0;
+
+  for (uint32_t i = 0; i < count; i++)
+  {
+    Task_t *task = tasks[i].task;
+
+    if (!tasks[i].enabled || task == NULL || tasks[i].run == NULL)
+    {
+      continue;
+    }
+
+    if ((int64_t)(now_us - task->next_release_us) < 0)
+    {
+      continue;
+    }
+
+    uint64_t absolute_deadline_us = task->next_release_us + task->deadline_us;
+
+    if (selected == NULL || absolute_deadline_us < selected_deadline_us)
+    {
+      selected = &tasks[i];
+      selected_deadline_us = absolute_deadline_us;
+    }
+  }
+
+  return selected;
+}
+
+static void Scheduler_RunTask(SchedTaskRef_t *selected)
+{
+  Task_t *task = selected->task;
+  uint64_t release_us = task->next_release_us;
+
+  uint64_t exec_start = micros();
+
+  selected->run();
+
+  uint64_t exec_finish = micros();
+  uint64_t finish_us = scheduler_now_us();
+
+  uint64_t exec_time = exec_finish - exec_start;
+  uint64_t response_time = finish_us - release_us;
+
+  Task_UpdateExecStats(task, exec_time);
+  Task_SaveExecSample(task, exec_time);
+  Task_UpdateResponseStats(task, response_time);
+  Task_CheckDeadline(task, response_time);
+
+  Task_AdvanceRelease(task, finish_us);
+}
+#endif
+
 static void Scheduler_ResetStats(void)
 {
   g_sched_total_cycles = 0;
@@ -1003,6 +1079,12 @@ static void Print_Profiling_Summary(void)
            "\r\n=== PROFILING SUMMARY %lu s ===\r\n",
            (unsigned long)(PROFILE_WINDOW_US / 1000000ULL));
   uart_print(msg);
+
+  #if SCHED_ALGO == SCHED_ALGO_EDF
+    uart_print("scheduler algorithm: EDF\r\n");
+  #else
+    uart_print("scheduler algorithm: SUPERLOOP\r\n");
+  #endif
 
 	#if ENABLE_REAL_TAU1
 	  snprintf(msg, sizeof(msg),
@@ -1592,6 +1674,8 @@ int main(void)
      * scheduling experiments.
      */
 
+    #if SCHED_ALGO == SCHED_ALGO_SUPERLOOP
+
     #if ENABLE_REAL_TAU1
       sched_start_cycles = DWT->CYCCNT;
 
@@ -1857,6 +1941,58 @@ int main(void)
 
         Task_AdvanceRelease(&tau2, finish_us);
       }
+    #endif
+
+    #elif SCHED_ALGO == SCHED_ALGO_EDF
+
+    SchedTaskRef_t edf_tasks[] =
+    {
+      { NULL, NULL, 0U },
+
+      #if ENABLE_SYNTH_CONTROL
+        { &tau_control, Tau_Control_Run, 1U },
+      #endif
+
+      #if ENABLE_REAL_TAU1
+        { &tau1, Tau1_Run, 1U },
+      #endif
+
+      #if ENABLE_SYNTH_LIDAR
+        { &tau_lidar, Tau_LiDAR_Run, 1U },
+      #endif
+
+      #if ENABLE_SYNTH_IMU
+        { &tau_imu, Tau_IMU_Run, 1U },
+      #endif
+
+      #if ENABLE_SYNTH_CAMERA
+        { &tau_camera, Tau_Camera_Run, 1U },
+      #endif
+
+      #if ENABLE_REAL_TAU2
+        { &tau2, Tau2_Run, 1U },
+      #endif
+    };
+
+    uint32_t edf_task_count = sizeof(edf_tasks) / sizeof(edf_tasks[0]);
+
+    sched_start_cycles = DWT->CYCCNT;
+    SchedTaskRef_t *selected_task = Scheduler_SelectEDF(edf_tasks,
+                                                        edf_task_count,
+                                                        now_us);
+    sched_end_cycles = DWT->CYCCNT;
+    scheduler_cycles_this_loop += (uint32_t)(sched_end_cycles - sched_start_cycles);
+
+    #if ENABLE_POLLING_PROFILE
+      Polling_UpdateStats(scheduler_cycles_this_loop);
+    #endif
+
+    if (selected_task != NULL)
+    {
+      Scheduler_UpdateStats(scheduler_cycles_this_loop);
+      Scheduler_RunTask(selected_task);
+    }
+
     #endif
 
 

@@ -179,6 +179,8 @@ static uint8_t g_temp = 0;
 static uint8_t g_hum = 0;
 static int g_dht_res = -99;
 
+static uint32_t g_cycles_per_us = 1;
+
 static uint64_t g_profile_start_us = 0;
 static uint32_t g_profile_start_ms = 0;
 
@@ -226,7 +228,7 @@ static void DWT_Init(void)
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
-static uint64_t micros(void)
+static inline uint64_t micros(void)
 {
   static uint32_t last_cycles = 0;
   static uint64_t high_cycles = 0;
@@ -242,10 +244,10 @@ static uint64_t micros(void)
 
   uint64_t total_cycles = high_cycles + current_cycles;
 
-  return total_cycles / (HAL_RCC_GetHCLKFreq() / 1000000);
+  return total_cycles / g_cycles_per_us;
 }
 
-static uint64_t scheduler_now_us(void)
+static inline uint64_t scheduler_now_us(void)
 {
   return micros();
 }
@@ -874,7 +876,7 @@ static void Print_Profiling_Summary(void)
 	  uint64_t tau_control_avg_response = 0;
 	#endif
 
-  uint32_t cycles_per_us = HAL_RCC_GetHCLKFreq() / 1000000;
+  uint32_t cycles_per_us = g_cycles_per_us;
 
   uint64_t sched_avg_cycles = 0;
   uint64_t sched_total_us = 0;
@@ -1528,6 +1530,12 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
+  g_cycles_per_us = HAL_RCC_GetHCLKFreq() / 1000000U;
+  if (g_cycles_per_us == 0U)
+  {
+    g_cycles_per_us = 1U;
+  }
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -1587,7 +1595,6 @@ int main(void)
     #if ENABLE_REAL_TAU1
       sched_start_cycles = DWT->CYCCNT;
 
-      now_us = scheduler_now_us();
       uint8_t tau1_ready = ((int64_t)(now_us - tau1.next_release_us) >= 0);
       uint64_t tau1_release_us = tau1.next_release_us;
 
@@ -1602,7 +1609,6 @@ int main(void)
     #if ENABLE_REAL_TAU2
       sched_start_cycles = DWT->CYCCNT;
 
-      now_us = scheduler_now_us();
       uint8_t tau2_ready = ((int64_t)(now_us - tau2.next_release_us) >= 0);
       uint64_t tau2_release_us = tau2.next_release_us;
 
@@ -1617,7 +1623,6 @@ int main(void)
     #if ENABLE_SYNTH_IMU
       sched_start_cycles = DWT->CYCCNT;
 
-      now_us = scheduler_now_us();
       uint8_t tau_imu_ready = ((int64_t)(now_us - tau_imu.next_release_us) >= 0);
       uint64_t tau_imu_release_us = tau_imu.next_release_us;
 
@@ -1632,7 +1637,6 @@ int main(void)
     #if ENABLE_SYNTH_CONTROL
       sched_start_cycles = DWT->CYCCNT;
 
-      now_us = scheduler_now_us();
       uint8_t tau_control_ready = ((int64_t)(now_us - tau_control.next_release_us) >= 0);
       uint64_t tau_control_release_us = tau_control.next_release_us;
 
@@ -1647,7 +1651,6 @@ int main(void)
     #if ENABLE_SYNTH_LIDAR
       sched_start_cycles = DWT->CYCCNT;
 
-      now_us = scheduler_now_us();
       uint8_t tau_lidar_ready = ((int64_t)(now_us - tau_lidar.next_release_us) >= 0);
       uint64_t tau_lidar_release_us = tau_lidar.next_release_us;
 
@@ -1662,7 +1665,6 @@ int main(void)
     #if ENABLE_SYNTH_CAMERA
       sched_start_cycles = DWT->CYCCNT;
 
-      now_us = scheduler_now_us();
       uint8_t tau_camera_ready = ((int64_t)(now_us - tau_camera.next_release_us) >= 0);
       uint64_t tau_camera_release_us = tau_camera.next_release_us;
 

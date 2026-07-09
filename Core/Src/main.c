@@ -46,15 +46,71 @@
 
 #define TAU_IMU_PERIOD_US    10000ULL   // T_I = 10 ms
 #define TAU_IMU_PERIOD_MS    10
-#define TAU_IMU_WORKLOAD_US  3000ULL    // C_I = 3 ms
 
 #define TAU_LIDAR_PERIOD_US    50000ULL   // T_L = 50 ms
 #define TAU_LIDAR_PERIOD_MS    50
-#define TAU_LIDAR_WORKLOAD_US  20000ULL   // C_L = 20 ms
 
 #define TAU_CAMERA_PERIOD_US    200000ULL  // T_C = 200 ms
 #define TAU_CAMERA_PERIOD_MS    200
-#define TAU_CAMERA_WORKLOAD_US  40000ULL   // C_C = 40 ms
+
+#define SCHED_ALGO_SUPERLOOP    0
+#define SCHED_ALGO_EDF          1
+#define SCHED_ALGO_CHUNKED_EDF  2
+
+#define WORKLOAD_SCENARIO_U50    0
+#define WORKLOAD_SCENARIO_U65    1
+#define WORKLOAD_SCENARIO_U80    2
+#define WORKLOAD_SCENARIO_U90    3
+#define WORKLOAD_SCENARIO_U100   4
+#define WORKLOAD_SCENARIO_U110   5
+
+#define WORKLOAD_SCENARIO WORKLOAD_SCENARIO_U90
+#define SCHED_ALGO SCHED_ALGO_CHUNKED_EDF
+
+#if WORKLOAD_SCENARIO == WORKLOAD_SCENARIO_U50
+  #define TAU_IMU_WORKLOAD_US     1667ULL
+  #define TAU_LIDAR_WORKLOAD_US   11111ULL
+  #define TAU_CAMERA_WORKLOAD_US  22222ULL
+  #define WORKLOAD_SCENARIO_NAME  "U50"
+  #define WORKLOAD_UTILIZATION_PERCENT 50U
+#elif WORKLOAD_SCENARIO == WORKLOAD_SCENARIO_U65
+  #define TAU_IMU_WORKLOAD_US     2167ULL
+  #define TAU_LIDAR_WORKLOAD_US   14444ULL
+  #define TAU_CAMERA_WORKLOAD_US  28889ULL
+  #define WORKLOAD_SCENARIO_NAME  "U65"
+  #define WORKLOAD_UTILIZATION_PERCENT 65U
+#elif WORKLOAD_SCENARIO == WORKLOAD_SCENARIO_U80
+  #define TAU_IMU_WORKLOAD_US     2667ULL
+  #define TAU_LIDAR_WORKLOAD_US   17778ULL
+  #define TAU_CAMERA_WORKLOAD_US  35556ULL
+  #define WORKLOAD_SCENARIO_NAME  "U80"
+  #define WORKLOAD_UTILIZATION_PERCENT 80U
+#elif WORKLOAD_SCENARIO == WORKLOAD_SCENARIO_U90
+  #define TAU_IMU_WORKLOAD_US     3000ULL
+  #define TAU_LIDAR_WORKLOAD_US   20000ULL
+  #define TAU_CAMERA_WORKLOAD_US  40000ULL
+  #define WORKLOAD_SCENARIO_NAME  "U90"
+  #define WORKLOAD_UTILIZATION_PERCENT 90U
+#elif WORKLOAD_SCENARIO == WORKLOAD_SCENARIO_U100
+  #define TAU_IMU_WORKLOAD_US     3333ULL
+  #define TAU_LIDAR_WORKLOAD_US   22222ULL
+  #define TAU_CAMERA_WORKLOAD_US  44444ULL
+  #define WORKLOAD_SCENARIO_NAME  "U100"
+  #define WORKLOAD_UTILIZATION_PERCENT 100U
+#elif WORKLOAD_SCENARIO == WORKLOAD_SCENARIO_U110
+  #define TAU_IMU_WORKLOAD_US     3667ULL
+  #define TAU_LIDAR_WORKLOAD_US   24444ULL
+  #define TAU_CAMERA_WORKLOAD_US  48889ULL
+  #define WORKLOAD_SCENARIO_NAME  "U110"
+  #define WORKLOAD_UTILIZATION_PERCENT 110U
+#else
+  #error "Unsupported WORKLOAD_SCENARIO"
+#endif
+
+#define UTIL_X10000 \
+  ((TAU_IMU_WORKLOAD_US * 10000ULL / TAU_IMU_PERIOD_US) + \
+   (TAU_LIDAR_WORKLOAD_US * 10000ULL / TAU_LIDAR_PERIOD_US) + \
+   (TAU_CAMERA_WORKLOAD_US * 10000ULL / TAU_CAMERA_PERIOD_US))
 
 #define PROFILE_WINDOW_MS 10000UL
 
@@ -70,13 +126,16 @@
 
 #define SCHEDULER_MODE SCHED_BUSY_POLLING
 
-#define SCHED_ALGO_SUPERLOOP 0
-#define SCHED_ALGO_EDF       1
-
-#define SCHED_ALGO SCHED_ALGO_EDF
-
-#if (SCHED_ALGO != SCHED_ALGO_SUPERLOOP) && (SCHED_ALGO != SCHED_ALGO_EDF)
+#if (SCHED_ALGO != SCHED_ALGO_SUPERLOOP) && \
+    (SCHED_ALGO != SCHED_ALGO_EDF) && \
+    (SCHED_ALGO != SCHED_ALGO_CHUNKED_EDF)
 #error "Unsupported scheduler algorithm"
+#endif
+
+#define EDF_CHUNK_US 1000ULL
+
+#if EDF_CHUNK_US == 0ULL
+#error "EDF_CHUNK_US must be greater than zero"
 #endif
 
 #define ENABLE_POLLING_PROFILE 1
@@ -118,6 +177,11 @@ typedef struct
   uint64_t skipped_release_count;
   uint64_t total_timing_failures;
 
+  uint8_t job_active;
+  uint64_t active_release_us;
+  uint64_t remaining_exec_us;
+  uint64_t accumulated_exec_us;
+
   uint32_t exec_hist[EXEC_HIST_BINS];
 } Task_t;
 
@@ -127,6 +191,7 @@ typedef struct
 {
   Task_t *task;
   TaskRunFn run;
+  uint64_t workload_us;
   uint8_t enabled;
 } SchedTaskRef_t;
 
@@ -502,6 +567,49 @@ static void Tau_Control_Run(void)
 }
 #endif
 
+#if SCHED_ALGO == SCHED_ALGO_CHUNKED_EDF
+#if ENABLE_REAL_TAU1 || ENABLE_REAL_TAU2
+#error "Chunked EDF supports synthetic tasks only"
+#endif
+#endif
+
+#if (SCHED_ALGO == SCHED_ALGO_EDF) || (SCHED_ALGO == SCHED_ALGO_CHUNKED_EDF)
+#if !ENABLE_SYNTH_CONTROL && !ENABLE_REAL_TAU1 && !ENABLE_SYNTH_LIDAR && \
+    !ENABLE_SYNTH_IMU && !ENABLE_SYNTH_CAMERA && !ENABLE_REAL_TAU2
+#error "EDF scheduler requires at least one enabled task"
+#endif
+
+static SchedTaskRef_t g_sched_tasks[] =
+{
+  #if ENABLE_SYNTH_CONTROL
+    { &tau_control, Tau_Control_Run, TAU_CONTROL_WORKLOAD_US, 1U },
+  #endif
+
+  #if ENABLE_REAL_TAU1
+    { &tau1, Tau1_Run, 0ULL, 1U },
+  #endif
+
+  #if ENABLE_SYNTH_LIDAR
+    { &tau_lidar, Tau_LiDAR_Run, TAU_LIDAR_WORKLOAD_US, 1U },
+  #endif
+
+  #if ENABLE_SYNTH_IMU
+    { &tau_imu, Tau_IMU_Run, TAU_IMU_WORKLOAD_US, 1U },
+  #endif
+
+  #if ENABLE_SYNTH_CAMERA
+    { &tau_camera, Tau_Camera_Run, TAU_CAMERA_WORKLOAD_US, 1U },
+  #endif
+
+  #if ENABLE_REAL_TAU2
+    { &tau2, Tau2_Run, 0ULL, 1U },
+  #endif
+};
+
+static const uint32_t g_sched_task_count =
+    sizeof(g_sched_tasks) / sizeof(g_sched_tasks[0]);
+#endif
+
 static void Print_Debug_Status(void)
 {
   char msg[180];
@@ -565,6 +673,11 @@ static void Task_ResetStats(Task_t *task)
 
   task->skipped_release_count = 0;
   task->total_timing_failures = 0;
+
+  task->job_active = 0;
+  task->active_release_us = 0;
+  task->remaining_exec_us = 0;
+  task->accumulated_exec_us = 0;
 
   for (int i = 0; i < EXEC_HIST_BINS; i++)
   {
@@ -753,6 +866,108 @@ static void Scheduler_RunTask(SchedTaskRef_t *selected)
   Task_CheckDeadline(task, response_time);
 
   Task_AdvanceRelease(task, finish_us);
+}
+#endif
+
+#if SCHED_ALGO == SCHED_ALGO_CHUNKED_EDF
+static uint64_t Scheduler_TaskAbsoluteDeadline(Task_t *task)
+{
+  uint64_t release_us = task->job_active
+      ? task->active_release_us
+      : task->next_release_us;
+
+  return release_us + task->deadline_us;
+}
+
+static uint8_t Scheduler_TaskReady(Task_t *task, uint64_t now_us)
+{
+  if (task->job_active)
+  {
+    return 1U;
+  }
+
+  return ((int64_t)(now_us - task->next_release_us) >= 0);
+}
+
+static SchedTaskRef_t *Scheduler_SelectChunkedEDF(SchedTaskRef_t *tasks,
+                                                  uint32_t count,
+                                                  uint64_t now_us)
+{
+  SchedTaskRef_t *selected = NULL;
+  uint64_t selected_deadline_us = 0;
+
+  for (uint32_t i = 0; i < count; i++)
+  {
+    Task_t *task = tasks[i].task;
+
+    if (!tasks[i].enabled || task == NULL || tasks[i].workload_us == 0ULL)
+    {
+      continue;
+    }
+
+    if (!Scheduler_TaskReady(task, now_us))
+    {
+      continue;
+    }
+
+    uint64_t absolute_deadline_us = Scheduler_TaskAbsoluteDeadline(task);
+
+    if (selected == NULL || absolute_deadline_us < selected_deadline_us)
+    {
+      selected = &tasks[i];
+      selected_deadline_us = absolute_deadline_us;
+    }
+  }
+
+  return selected;
+}
+
+static void Scheduler_RunChunkedTask(SchedTaskRef_t *selected)
+{
+  Task_t *task = selected->task;
+
+  if (!task->job_active)
+  {
+    task->active_release_us = task->next_release_us;
+    task->remaining_exec_us = selected->workload_us;
+    task->accumulated_exec_us = 0;
+    task->job_active = 1U;
+  }
+
+  uint64_t chunk_us = EDF_CHUNK_US;
+
+  if (task->remaining_exec_us < chunk_us)
+  {
+    chunk_us = task->remaining_exec_us;
+  }
+
+  uint64_t exec_start = micros();
+
+  Synthetic_Workload_us(chunk_us);
+
+  uint64_t exec_finish = micros();
+  uint64_t actual_chunk_exec_us = exec_finish - exec_start;
+
+  task->accumulated_exec_us += actual_chunk_exec_us;
+  task->remaining_exec_us -= chunk_us;
+
+  if (task->remaining_exec_us == 0ULL)
+  {
+    uint64_t finish_us = scheduler_now_us();
+    uint64_t response_time = finish_us - task->active_release_us;
+
+    task->run_count++;
+
+    Task_UpdateExecStats(task, task->accumulated_exec_us);
+    Task_UpdateResponseStats(task, response_time);
+    Task_CheckDeadline(task, response_time);
+    Task_AdvanceRelease(task, finish_us);
+
+    task->job_active = 0;
+    task->active_release_us = 0;
+    task->remaining_exec_us = 0;
+    task->accumulated_exec_us = 0;
+  }
 }
 #endif
 
@@ -1082,8 +1297,33 @@ static void Print_Profiling_Summary(void)
 
   #if SCHED_ALGO == SCHED_ALGO_EDF
     uart_print("scheduler algorithm: EDF\r\n");
+  #elif SCHED_ALGO == SCHED_ALGO_CHUNKED_EDF
+    uart_print("scheduler algorithm: CHUNKED_EDF\r\n");
   #else
     uart_print("scheduler algorithm: SUPERLOOP\r\n");
+  #endif
+
+  snprintf(msg, sizeof(msg),
+           "workload scenario: %s\r\n",
+           WORKLOAD_SCENARIO_NAME);
+  uart_print(msg);
+
+  snprintf(msg, sizeof(msg),
+           "theoretical utilization: %lu %%\r\n",
+           (unsigned long)WORKLOAD_UTILIZATION_PERCENT);
+  uart_print(msg);
+
+  snprintf(msg, sizeof(msg),
+           "theoretical utilization exact: %lu.%02lu %%\r\n",
+           (unsigned long)(UTIL_X10000 / 100ULL),
+           (unsigned long)(UTIL_X10000 % 100ULL));
+  uart_print(msg);
+
+  #if SCHED_ALGO == SCHED_ALGO_CHUNKED_EDF
+    snprintf(msg, sizeof(msg),
+             "edf chunk size: %lu us\r\n",
+             (unsigned long)EDF_CHUNK_US);
+    uart_print(msg);
   #endif
 
 	#if ENABLE_REAL_TAU1
@@ -1631,8 +1871,14 @@ int main(void)
 
   DWT_Init();
 
+  char msg[128];
+
   uart_print("\r\nSynthetic-only scheduler demo started\r\n");
   uart_print("Tasks: IMU + LiDAR + Camera\r\n");
+  snprintf(msg, sizeof(msg),
+           "Workload scenario: %s\r\n",
+           WORKLOAD_SCENARIO_NAME);
+  uart_print(msg);
   uart_print("Real sensors disabled: HC-SR04 and DHT11 are not used in scheduler\r\n");
 
   HAL_Delay(500);
@@ -1945,40 +2191,9 @@ int main(void)
 
     #elif SCHED_ALGO == SCHED_ALGO_EDF
 
-    SchedTaskRef_t edf_tasks[] =
-    {
-      { NULL, NULL, 0U },
-
-      #if ENABLE_SYNTH_CONTROL
-        { &tau_control, Tau_Control_Run, 1U },
-      #endif
-
-      #if ENABLE_REAL_TAU1
-        { &tau1, Tau1_Run, 1U },
-      #endif
-
-      #if ENABLE_SYNTH_LIDAR
-        { &tau_lidar, Tau_LiDAR_Run, 1U },
-      #endif
-
-      #if ENABLE_SYNTH_IMU
-        { &tau_imu, Tau_IMU_Run, 1U },
-      #endif
-
-      #if ENABLE_SYNTH_CAMERA
-        { &tau_camera, Tau_Camera_Run, 1U },
-      #endif
-
-      #if ENABLE_REAL_TAU2
-        { &tau2, Tau2_Run, 1U },
-      #endif
-    };
-
-    uint32_t edf_task_count = sizeof(edf_tasks) / sizeof(edf_tasks[0]);
-
     sched_start_cycles = DWT->CYCCNT;
-    SchedTaskRef_t *selected_task = Scheduler_SelectEDF(edf_tasks,
-                                                        edf_task_count,
+    SchedTaskRef_t *selected_task = Scheduler_SelectEDF(g_sched_tasks,
+                                                        g_sched_task_count,
                                                         now_us);
     sched_end_cycles = DWT->CYCCNT;
     scheduler_cycles_this_loop += (uint32_t)(sched_end_cycles - sched_start_cycles);
@@ -1991,6 +2206,25 @@ int main(void)
     {
       Scheduler_UpdateStats(scheduler_cycles_this_loop);
       Scheduler_RunTask(selected_task);
+    }
+
+    #elif SCHED_ALGO == SCHED_ALGO_CHUNKED_EDF
+
+    sched_start_cycles = DWT->CYCCNT;
+    SchedTaskRef_t *selected_task = Scheduler_SelectChunkedEDF(g_sched_tasks,
+                                                               g_sched_task_count,
+                                                               now_us);
+    sched_end_cycles = DWT->CYCCNT;
+    scheduler_cycles_this_loop += (uint32_t)(sched_end_cycles - sched_start_cycles);
+
+    #if ENABLE_POLLING_PROFILE
+      Polling_UpdateStats(scheduler_cycles_this_loop);
+    #endif
+
+    if (selected_task != NULL)
+    {
+      Scheduler_UpdateStats(scheduler_cycles_this_loop);
+      Scheduler_RunChunkedTask(selected_task);
     }
 
     #endif
